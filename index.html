@@ -11,7 +11,6 @@
     input[type="text"] { width: 100%; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-  <script src="https://unpkg.com/@xmtp/xmtp-js/dist/xmtp.min.js"></script>
 </head>
 <body>
   <h1>XMTP Chat Demo</h1>
@@ -30,7 +29,9 @@
     <div id="messages"></div>
   </div>
 
-  <script>
+  <script type="module">
+    import { Client } from 'https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js';
+
     let client;
 
     document.getElementById('connect').addEventListener('click', async () => {
@@ -41,7 +42,7 @@
       }
       try {
         const wallet = new ethers.Wallet(pk);
-        client = await xmtp.Client.create(wallet, { env: 'production' });
+        client = await Client.create(wallet, { env: 'production' });
         document.getElementById('chat').style.display = 'block';
       } catch (err) {
         console.error(err);
