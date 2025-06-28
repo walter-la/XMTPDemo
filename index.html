@@ -11,6 +11,18 @@
     input[type="text"] { width: 100%; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "@xmtp/browser-sdk": "https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/browser/index.js",
+        "@xmtp/content-type-group-updated": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-group-updated@2.0.2/dist/browser/index.js",
+        "@xmtp/content-type-primitives": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-primitives@2.0.2/dist/browser/index.js",
+        "@xmtp/content-type-text": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-text@2.0.2/dist/browser/index.js",
+        "@xmtp/wasm-bindings": "https://cdn.jsdelivr.net/npm/@xmtp/wasm-bindings@1.2.5/dist/browser/index.js",
+        "uuid": "https://cdn.jsdelivr.net/npm/uuid@11.1.0/+esm"
+      }
+    }
+  </script>
 </head>
 <body>
   <h1>XMTP Chat Demo</h1>
@@ -30,7 +42,7 @@
   </div>
 
   <script type="module">
-    import { Client } from 'https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js';
+    import { Client } from '@xmtp/browser-sdk';
 
     let client;
 
