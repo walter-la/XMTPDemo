@@ -2,51 +2,53 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>XMTP 原生 Demo</title>
+  <title>XMTP 原生 Demo（Import Map 解法）</title>
   <style>
     body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
-    input, button, textarea { width: 100%; margin: 0.5rem 0; padding: 0.5rem; box-sizing: border-box; }
-    #messages { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 0.5rem; background: #f9f9f9; }
-    .msg { margin-bottom: 0.5rem; }
+    input, button, textarea { width: 100%; margin: .5rem 0; padding: .5rem; box-sizing: border-box; }
+    #messages { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: .5rem; background: #f9f9f9; }
+    .msg { margin-bottom: .5rem; }
     .msg.you { text-align: right; color: blue; }
     .msg.other { text-align: left; color: green; }
   </style>
+
+  <!-- Import Map：把 bare imports 都指到 jsDelivr 上的 ESM 檔 -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@xmtp/browser-sdk": "https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js",
+      "@xmtp/content-type-primitives": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-primitives@2.0.2/dist/index.js",   /* version 2.0.2 最後發佈 2 個月前*/ :contentReference[oaicite:0]{index=0}
+      "@xmtp/content-type-group-updated": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-group-updated@2.0.2/dist/index.js" /* 2.0.2 */ :contentReference[oaicite:1]{index=1}
+      /* 如有其他 content‐type 也可以同樣加進來 */
+    }
+  }
+  </script>
 </head>
 <body>
 
-  <h2>XMTP 原生 HTML + JS 聊天 Demo</h2>
+  <h2>XMTP HTML + JS 聊天 Demo</h2>
 
-  <!-- 1. 私鑰輸入 & 連線 -->
-  <label>你的私鑰 (hex, 不含 0x):</label>
+  <label>你的私鑰 (hex，不含 0x)：</label>
   <input type="password" id="privateKey" placeholder="輸入私鑰">
   <button id="connectBtn">Connect</button>
   <p id="status">尚未連線</p>
-
   <hr>
 
-  <!-- 2. 對方地址 & 建立對話 -->
-  <label>對方地址 (hex):</label>
-  <input type="text" id="peerAddress" placeholder="0x...">
+  <label>對方地址 (0x…)：</label>
+  <input type="text" id="peerAddress" placeholder="0x…">
   <button id="startChatBtn" disabled>啟動對話</button>
-
   <hr>
 
-  <!-- 3. 訊息列表 -->
   <div id="messages"></div>
-
-  <!-- 4. 訊息輸入 & 發送 -->
-  <textarea id="messageInput" rows="3" placeholder="輸入訊息..." disabled></textarea>
+  <textarea id="messageInput" rows="3" placeholder="輸入訊息…" disabled></textarea>
   <button id="sendBtn" disabled>Send</button>
 
-  <!-- 對應 ES module，才能用 import -->
+  <!-- 用 ES module script 才能 import -->
   <script type="module">
-    // 1. 直接從 CDN 以絕對 URL 匯入 ES module 版
-    import { Client } from 'https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js';  // XMTP ES module :contentReference[oaicite:3]{index=3}
-    import { Wallet } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';      // ethers ES module :contentReference[oaicite:4]{index=4}
+    import { Client } from "@xmtp/browser-sdk";
+    import { Wallet } from "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js";
 
-    let xmtpClient = null;
-    let conversation = null;
-    let walletAddress = '';
+    let xmtpClient = null, conversation = null, walletAddress = '';
 
     const statusEl     = document.getElementById('status');
     const connectBtn   = document.getElementById('connectBtn');
@@ -64,20 +66,13 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    // 1. Connect
     connectBtn.onclick = async () => {
       const pk = document.getElementById('privateKey').value.trim();
-      if (!pk) {
-        alert('請輸入私鑰');
-        return;
-      }
+      if (!pk) return alert('請輸入私鑰');
       try {
-        // ethers Wallet 從私鑰生成 signer :contentReference[oaicite:5]{index=5}
         const wallet = new Wallet('0x' + pk);
         walletAddress = wallet.address;
-        statusEl.innerText = '連線中...';
-
-        // 建立 XMTP client :contentReference[oaicite:6]{index=6}
+        statusEl.innerText = '連線中…';
         xmtpClient = await Client.create(wallet, { env: 'dev' });
         statusEl.innerText = `已連線：${walletAddress}`;
         startChatBtn.disabled = false;
@@ -87,20 +82,14 @@
       }
     };
 
-    // 2. Start conversation
     startChatBtn.onclick = async () => {
       const peer = peerInput.value.trim();
-      if (!peer) {
-        alert('請輸入對方地址');
-        return;
-      }
+      if (!peer) return alert('請輸入對方地址');
       conversation = await xmtpClient.conversations.newConversation(peer);
       appendMessage(`*** 與 ${peer} 的對話已啟動 ***`, 'other');
-
       msgInput.disabled = false;
       sendBtn.disabled = false;
 
-      // 3. 監聽對方訊息
       (async () => {
         for await (const msg of await conversation.streamMessages()) {
           if (msg.senderAddress !== walletAddress) {
@@ -110,7 +99,6 @@
       })();
     };
 
-    // 4. Send message
     sendBtn.onclick = async () => {
       const text = msgInput.value.trim();
       if (!text) return;
