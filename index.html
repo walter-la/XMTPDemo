@@ -1,106 +1,134 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>XMTP Demo</title>
+  <title>XMTP 原生 Demo</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #chat { margin-top: 20px; }
-    #messages { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 10px; }
-    textarea { width: 100%; height: 60px; }
-    input[type="text"] { width: 100%; }
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+    input, button, textarea { width: 100%; margin: 0.5rem 0; padding: 0.5rem; box-sizing: border-box; }
+    #messages { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 0.5rem; background: #f9f9f9; }
+    .msg { margin-bottom: 0.5rem; }
+    .msg.you { text-align: right; color: blue; }
+    .msg.other { text-align: left; color: green; }
   </style>
+  <!-- ethers.js 用於從私鑰生成 wallet -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-  <script type="importmap">
-    {
-      "imports": {
-        "@xmtp/browser-sdk": "https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js",
-        "@xmtp/content-type-group-updated": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-group-updated@2.0.2/dist/browser/index.js",
-        "@xmtp/content-type-primitives": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-primitives@2.0.2/dist/browser/index.js",
-        "@xmtp/content-type-text": "https://cdn.jsdelivr.net/npm/@xmtp/content-type-text@2.0.2/dist/browser/index.js",
-        "@xmtp/wasm-bindings": "https://cdn.jsdelivr.net/npm/@xmtp/wasm-bindings@1.2.3/dist/bindings_wasm.js",
-        "@xmtp/proto": "https://cdn.jsdelivr.net/npm/@xmtp/proto@3.83.0/ts/dist/esm/index.js",
-        "uuid": "https://cdn.jsdelivr.net/npm/uuid@11.1.0/+esm"
-      }
-    }
-  </script>
+  <!-- XMTP Browser SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js"></script>
 </head>
 <body>
-  <h1>XMTP Chat Demo</h1>
-  <div>
-    <label>Private Key:</label><br />
-    <input id="privateKey" type="text" placeholder="0x..." /><br />
-    <button id="connect">Connect</button>
-  </div>
 
-  <div id="chat" style="display:none">
-    <h2>Chat</h2>
-    <label>Recipient Address:</label><br />
-    <input id="recipient" type="text" placeholder="0x..." /><br />
-    <textarea id="message" placeholder="Type your message"></textarea><br />
-    <button id="send">Send</button>
-    <div id="messages"></div>
-  </div>
+  <h2>XMTP 原生 HTML + JS 聊天 Demo</h2>
 
-  <script type="module">
-    import { Client } from '@xmtp/browser-sdk';
+  <!-- 1. 私鑰輸入 & 連線 -->
+  <label>你的私鑰 (hex, 不含 0x):</label>
+  <input type="password" id="privateKey" placeholder="輸入私鑰">
+  <button id="connectBtn">Connect</button>
+  <p id="status">尚未連線</p>
 
-    let client;
+  <hr>
 
-    document.getElementById('connect').addEventListener('click', async () => {
-      const pk = document.getElementById('privateKey').value.trim();
-      if (!pk) {
-        alert('Please enter a private key');
-        return;
+  <!-- 2. 對方地址 & 建立對話 -->
+  <label>對方地址 (hex):</label>
+  <input type="text" id="peerAddress" placeholder="0x...">
+  <button id="startChatBtn" disabled>啟動對話</button>
+
+  <hr>
+
+  <!-- 3. 訊息列表 -->
+  <div id="messages"></div>
+
+  <!-- 4. 訊息輸入 & 發送 -->
+  <textarea id="messageInput" rows="3" placeholder="輸入訊息..." disabled></textarea>
+  <button id="sendBtn" disabled>Send</button>
+
+  <script>
+    (async () => {
+      const { Client } = window.xmtp;       // XMTP SDK
+      let xmtpClient = null;
+      let conversation = null;
+      let walletAddress = '';
+
+      const statusEl = document.getElementById('status');
+      const connectBtn = document.getElementById('connectBtn');
+      const startChatBtn = document.getElementById('startChatBtn');
+      const sendBtn = document.getElementById('sendBtn');
+      const msgInput = document.getElementById('messageInput');
+      const peerInput = document.getElementById('peerAddress');
+      const messagesEl = document.getElementById('messages');
+
+      // 工具：在訊息區加一則訊息
+      function appendMessage(text, who) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + who;
+        div.innerText = text;
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       }
-      try {
-        const wallet = new ethers.Wallet(pk);
-        client = await Client.create(wallet, { env: 'production' });
-        document.getElementById('chat').style.display = 'block';
-      } catch (err) {
-        console.error(err);
-        alert('Failed to create client');
-      }
-    });
 
-    async function fetchMessages() {
-      if (!client) return;
-      const peer = document.getElementById('recipient').value.trim();
-      if (!peer) return;
-      try {
-        const conversation = await client.conversations.newConversation(peer);
-        const messages = await conversation.messages();
-        const container = document.getElementById('messages');
-        container.innerHTML = '';
-        messages.forEach(m => {
-          const div = document.createElement('div');
-          div.textContent = `${m.senderAddress}: ${m.content}`;
-          container.appendChild(div);
-        });
-      } catch (err) {
-        console.error('Fetch messages error', err);
-      }
-    }
+      // 1. Connect
+      connectBtn.onclick = async () => {
+        const pk = document.getElementById('privateKey').value.trim();
+        if (!pk) {
+          alert('請輸入私鑰');
+          return;
+        }
+        try {
+          // 以 ethers.js 從私鑰建立 signer
+          const wallet = new ethers.Wallet('0x' + pk);
+          walletAddress = wallet.address;
+          statusEl.innerText = '連線中...';
 
-    setInterval(fetchMessages, 3000);
+          // 建立 XMTP client
+          xmtpClient = await Client.create(wallet, { env: 'dev' });
+          statusEl.innerText = `已連線：${walletAddress}`;
+          startChatBtn.disabled = false;
+        } catch (e) {
+          console.error(e);
+          alert('連線失敗，請檢查私鑰');
+        }
+      };
 
-    document.getElementById('send').addEventListener('click', async () => {
-      if (!client) {
-        alert('Connect first');
-        return;
-      }
-      const peer = document.getElementById('recipient').value.trim();
-      const msg = document.getElementById('message').value;
-      if (!peer || !msg) return;
-      try {
-        const conversation = await client.conversations.newConversation(peer);
-        await conversation.send(msg);
-        document.getElementById('message').value = '';
-        fetchMessages();
-      } catch (err) {
-        console.error('Send error', err);
-      }
-    });
+      // 2. Start conversation
+      startChatBtn.onclick = async () => {
+        const peer = peerInput.value.trim();
+        if (!peer) {
+          alert('請輸入對方地址');
+          return;
+        }
+        // 建立或取得 conversation
+        conversation = await xmtpClient.conversations.newConversation(peer);
+        appendMessage(`*** 與 ${peer} 的對話已啟動 ***`, 'other');
+
+        // 啟用輸入＆送出
+        msgInput.disabled = false;
+        sendBtn.disabled = false;
+
+        // 3. 實時監聽對方訊息
+        (async () => {
+          for await (const msg of await conversation.streamMessages()) {
+            // 只顯示「對方」訊息
+            if (msg.senderAddress !== walletAddress) {
+              appendMessage(msg.content, 'other');
+            }
+          }
+        })();
+      };
+
+      // 4. Send message
+      sendBtn.onclick = async () => {
+        const text = msgInput.value.trim();
+        if (!text) return;
+        try {
+          await conversation.send(text);
+          appendMessage(text, 'you');
+          msgInput.value = '';
+        } catch (e) {
+          console.error(e);
+          alert('發送失敗');
+        }
+      };
+    })();
   </script>
 </body>
 </html>
