@@ -11,10 +11,6 @@
     .msg.you { text-align: right; color: blue; }
     .msg.other { text-align: left; color: green; }
   </style>
-  <!-- ethers.js 用於從私鑰生成 wallet -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-  <!-- XMTP Browser SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js"></script>
 </head>
 <body>
 
@@ -42,93 +38,91 @@
   <textarea id="messageInput" rows="3" placeholder="輸入訊息..." disabled></textarea>
   <button id="sendBtn" disabled>Send</button>
 
-  <script>
-    (async () => {
-      const { Client } = window.xmtp;       // XMTP SDK
-      let xmtpClient = null;
-      let conversation = null;
-      let walletAddress = '';
+  <!-- 對應 ES module，才能用 import -->
+  <script type="module">
+    // 1. 直接從 CDN 以絕對 URL 匯入 ES module 版
+    import { Client } from 'https://cdn.jsdelivr.net/npm/@xmtp/browser-sdk@3.0.1/dist/index.js';  // XMTP ES module :contentReference[oaicite:3]{index=3}
+    import { Wallet } from 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js';      // ethers ES module :contentReference[oaicite:4]{index=4}
 
-      const statusEl = document.getElementById('status');
-      const connectBtn = document.getElementById('connectBtn');
-      const startChatBtn = document.getElementById('startChatBtn');
-      const sendBtn = document.getElementById('sendBtn');
-      const msgInput = document.getElementById('messageInput');
-      const peerInput = document.getElementById('peerAddress');
-      const messagesEl = document.getElementById('messages');
+    let xmtpClient = null;
+    let conversation = null;
+    let walletAddress = '';
 
-      // 工具：在訊息區加一則訊息
-      function appendMessage(text, who) {
-        const div = document.createElement('div');
-        div.className = 'msg ' + who;
-        div.innerText = text;
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+    const statusEl     = document.getElementById('status');
+    const connectBtn   = document.getElementById('connectBtn');
+    const startChatBtn = document.getElementById('startChatBtn');
+    const sendBtn      = document.getElementById('sendBtn');
+    const msgInput     = document.getElementById('messageInput');
+    const peerInput    = document.getElementById('peerAddress');
+    const messagesEl   = document.getElementById('messages');
+
+    function appendMessage(text, who) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + who;
+      div.innerText = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // 1. Connect
+    connectBtn.onclick = async () => {
+      const pk = document.getElementById('privateKey').value.trim();
+      if (!pk) {
+        alert('請輸入私鑰');
+        return;
       }
+      try {
+        // ethers Wallet 從私鑰生成 signer :contentReference[oaicite:5]{index=5}
+        const wallet = new Wallet('0x' + pk);
+        walletAddress = wallet.address;
+        statusEl.innerText = '連線中...';
 
-      // 1. Connect
-      connectBtn.onclick = async () => {
-        const pk = document.getElementById('privateKey').value.trim();
-        if (!pk) {
-          alert('請輸入私鑰');
-          return;
-        }
-        try {
-          // 以 ethers.js 從私鑰建立 signer
-          const wallet = new ethers.Wallet('0x' + pk);
-          walletAddress = wallet.address;
-          statusEl.innerText = '連線中...';
+        // 建立 XMTP client :contentReference[oaicite:6]{index=6}
+        xmtpClient = await Client.create(wallet, { env: 'dev' });
+        statusEl.innerText = `已連線：${walletAddress}`;
+        startChatBtn.disabled = false;
+      } catch (e) {
+        console.error(e);
+        alert('連線失敗，請檢查私鑰');
+      }
+    };
 
-          // 建立 XMTP client
-          xmtpClient = await Client.create(wallet, { env: 'dev' });
-          statusEl.innerText = `已連線：${walletAddress}`;
-          startChatBtn.disabled = false;
-        } catch (e) {
-          console.error(e);
-          alert('連線失敗，請檢查私鑰');
-        }
-      };
+    // 2. Start conversation
+    startChatBtn.onclick = async () => {
+      const peer = peerInput.value.trim();
+      if (!peer) {
+        alert('請輸入對方地址');
+        return;
+      }
+      conversation = await xmtpClient.conversations.newConversation(peer);
+      appendMessage(`*** 與 ${peer} 的對話已啟動 ***`, 'other');
 
-      // 2. Start conversation
-      startChatBtn.onclick = async () => {
-        const peer = peerInput.value.trim();
-        if (!peer) {
-          alert('請輸入對方地址');
-          return;
-        }
-        // 建立或取得 conversation
-        conversation = await xmtpClient.conversations.newConversation(peer);
-        appendMessage(`*** 與 ${peer} 的對話已啟動 ***`, 'other');
+      msgInput.disabled = false;
+      sendBtn.disabled = false;
 
-        // 啟用輸入＆送出
-        msgInput.disabled = false;
-        sendBtn.disabled = false;
-
-        // 3. 實時監聽對方訊息
-        (async () => {
-          for await (const msg of await conversation.streamMessages()) {
-            // 只顯示「對方」訊息
-            if (msg.senderAddress !== walletAddress) {
-              appendMessage(msg.content, 'other');
-            }
+      // 3. 監聽對方訊息
+      (async () => {
+        for await (const msg of await conversation.streamMessages()) {
+          if (msg.senderAddress !== walletAddress) {
+            appendMessage(msg.content, 'other');
           }
-        })();
-      };
-
-      // 4. Send message
-      sendBtn.onclick = async () => {
-        const text = msgInput.value.trim();
-        if (!text) return;
-        try {
-          await conversation.send(text);
-          appendMessage(text, 'you');
-          msgInput.value = '';
-        } catch (e) {
-          console.error(e);
-          alert('發送失敗');
         }
-      };
-    })();
+      })();
+    };
+
+    // 4. Send message
+    sendBtn.onclick = async () => {
+      const text = msgInput.value.trim();
+      if (!text) return;
+      try {
+        await conversation.send(text);
+        appendMessage(text, 'you');
+        msgInput.value = '';
+      } catch (e) {
+        console.error(e);
+        alert('發送失敗');
+      }
+    };
   </script>
 </body>
 </html>
