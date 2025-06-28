@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>XMTP Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #chat { margin-top: 20px; }
+    #messages { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 10px; }
+    textarea { width: 100%; height: 60px; }
+    input[type="text"] { width: 100%; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://unpkg.com/@xmtp/xmtp-js/dist/xmtp.min.js"></script>
+</head>
+<body>
+  <h1>XMTP Chat Demo</h1>
+  <div>
+    <label>Private Key:</label><br />
+    <input id="privateKey" type="text" placeholder="0x..." /><br />
+    <button id="connect">Connect</button>
+  </div>
+
+  <div id="chat" style="display:none">
+    <h2>Chat</h2>
+    <label>Recipient Address:</label><br />
+    <input id="recipient" type="text" placeholder="0x..." /><br />
+    <textarea id="message" placeholder="Type your message"></textarea><br />
+    <button id="send">Send</button>
+    <div id="messages"></div>
+  </div>
+
+  <script>
+    let client;
+
+    document.getElementById('connect').addEventListener('click', async () => {
+      const pk = document.getElementById('privateKey').value.trim();
+      if (!pk) {
+        alert('Please enter a private key');
+        return;
+      }
+      try {
+        const wallet = new ethers.Wallet(pk);
+        client = await xmtp.Client.create(wallet, { env: 'production' });
+        document.getElementById('chat').style.display = 'block';
+      } catch (err) {
+        console.error(err);
+        alert('Failed to create client');
+      }
+    });
+
+    async function fetchMessages() {
+      if (!client) return;
+      const peer = document.getElementById('recipient').value.trim();
+      if (!peer) return;
+      try {
+        const conversation = await client.conversations.newConversation(peer);
+        const messages = await conversation.messages();
+        const container = document.getElementById('messages');
+        container.innerHTML = '';
+        messages.forEach(m => {
+          const div = document.createElement('div');
+          div.textContent = `${m.senderAddress}: ${m.content}`;
+          container.appendChild(div);
+        });
+      } catch (err) {
+        console.error('Fetch messages error', err);
+      }
+    }
+
+    setInterval(fetchMessages, 3000);
+
+    document.getElementById('send').addEventListener('click', async () => {
+      if (!client) {
+        alert('Connect first');
+        return;
+      }
+      const peer = document.getElementById('recipient').value.trim();
+      const msg = document.getElementById('message').value;
+      if (!peer || !msg) return;
+      try {
+        const conversation = await client.conversations.newConversation(peer);
+        await conversation.send(msg);
+        document.getElementById('message').value = '';
+        fetchMessages();
+      } catch (err) {
+        console.error('Send error', err);
+      }
+    });
+  </script>
+</body>
+</html>
