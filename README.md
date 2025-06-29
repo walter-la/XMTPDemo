@@ -14,3 +14,6 @@ Include the SDK in your module script using:
 ```
 
 Open `index.html` in a modern browser to try the chat example.
+
+When entering your private key, you may include or omit the `0x` prefix.
+The input will be validated and trimmed automatically.
