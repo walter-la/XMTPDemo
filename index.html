@@ -67,8 +67,10 @@
     }
 
     connectBtn.onclick = async () => {
-      const pk = document.getElementById('privateKey').value.trim();
+      let pk = document.getElementById('privateKey').value.trim();
       if (!pk) return alert('請輸入私鑰');
+      pk = pk.replace(/^0x/i, '');
+      if (pk.length !== 64) return alert('私鑰需為 64 個十六進位字元');
       try {
         const wallet = new Wallet('0x' + pk);
         walletAddress = wallet.address;
